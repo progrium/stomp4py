@@ -4,18 +4,6 @@ from stomp4py import Frame
 from stomp4py.server import BaseHandler
 from stomp4py.server.stream import StreamParser, StreamFrame
 
-class JsonFrame(Frame):
-    
-    def __init__(self, json_string):
-        obj = json.loads(json_string)
-        super(JsonFrame, self).__init__(**obj)
-    
-    def pack(self):
-        return json.dumps({
-            'command': self.command, 
-            'headers': self.headers, 
-            'body': self.body,})
-
 class WebSocketHandler(BaseHandler):
     """ We're assuming a bit about the websocket API that will be used """
     
