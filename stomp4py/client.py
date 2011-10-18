@@ -5,7 +5,7 @@ from stomp4py.parser import StompParser
 
 # WORK IN PROGRESS
 # Borrowed from https://github.com/coopernurse/radiator as a baseline
-# Haven't gotten to integrating it with the parser
+# Haven't gotten to integrating it with this project
 
 class StompClient(object):
 

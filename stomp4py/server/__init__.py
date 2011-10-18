@@ -1,45 +1,40 @@
-import collections
 import uuid
 import time
 import socket
 
-from stomp4py.parser import Parser, Frame
-
-class ServerHandler(object):
-
-    def __init__(self, socket, broker):
-        self.socket = socket
+class BaseHandler(object):
+    
+    def __init__(self, broker):
         self.broker = broker
-        self.parser = Parser()
         self.connected = True
     
     def serve(self):
         while self.connected:
             try:
-                self.parser.feed(self.socket.recv(1024))
-                frame = self.parser.getFrame()
+                frame = self._recv()
                 if frame:
                     self._dispatch(frame)
             except IOError:
                 self.connected = False
-        try:
-            self.socket.shutdown(socket.SHUT_RDWR)
-            self.socket.close()
-        except:
-            pass
-        self.broker.destroy_session(self.session_id)
+        self._close()
 
-    def _send(self, frame):
-        self.socket.sendall(frame.pack())
+    def _close(self):
+        raise NotImplemented()
+
+    def _recv(self):
+        raise NotImplemented()
+
+    def _send(self, command, headers, body=None):
+        raise NotImplemented()
     
     def _send_receipt(self, frame):
         if frame.error is not None:
-            self._send(Frame("ERROR", {'receipt-id': frame.receipt, 'message': frame.error}))
+            self._send("ERROR", {'receipt-id': frame.receipt, 'message': frame.error})
         else:
-            self._send(Frame("RECEIPT", {'receipt-id': frame.receipt}))
+            self._send("RECEIPT", {'receipt-id': frame.receipt})
     
     def _send_message(self, destination, message_id, body):
-        self._send(Frame("MESSAGE", {'destination': destination, 'message-id': message_id}, body))
+        self._send("MESSAGE", {'destination': destination, 'message-id': message_id}, body)
 
     def _dispatch(self, frame):
         handler = 'handle_%s' % frame.command.lower()
@@ -50,7 +45,7 @@ class ServerHandler(object):
 
     def handle_connect(self, frame):
         self.session_id = uuid.uuid4().hex
-        self._send(Frame("CONNECTED", {'session': self.session_id})
+        self._send("CONNECTED", {'session': self.session_id})
 
     def handle_send(self, frame):
         self.broker.send(frame.destination, frame.body)

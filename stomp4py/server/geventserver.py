@@ -38,4 +38,4 @@ if __name__ == '__main__':
 
     server = gevent.server.StreamServer(('127.0.0.1', 1234), handle) # creates a new server
     print "Starting Stomp server on 1234..."
-    server.start()
+    server.serve_forever()

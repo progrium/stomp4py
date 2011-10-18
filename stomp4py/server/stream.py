@@ -5,8 +5,11 @@ Created on 2010/8/22
 '''
 # Based on https://bitbucket.org/victorlin/gevent_stomp
 
-class Parser(object):
-    """Parser for parsing STOMP frames
+from stomp4py import Frame
+from stomp4py.server import BaseHandler
+
+class StreamParser(object):
+    """Parser for parsing STOMP frames from a stream
     
     """
     
@@ -84,7 +87,7 @@ class Parser(object):
             if i is not None:
                 body = data[:i]
                 data = data[i+1:]
-                frame = StompFrame(self._command, self._headers, body)
+                frame = StreamFrame(self._command, self._headers, body)
                 self._command = None
                 self._headers = None
                 self._phase = self.headerPhase
@@ -92,60 +95,12 @@ class Parser(object):
         self.buffer = [data]
         return frame
             
-class Frame(object):
+class StreamFrame(Frame):
     """A frame of STOMP protocol
     
     """
     
     newline = '\n'
-    
-    def __init__(self, command, headers=None, body=''):
-        self.command = command
-        self.headers = headers
-        if self.headers is None:
-            self.headers = {}
-        self.body = body
-        self.error = None
-    
-    @property
-    def destination(self):
-        """ SEND, SUBSCRIBE, MESSAGE """
-        return self.headers.get('destination')
-    
-    @property
-    def transaction(self):
-        """ SEND, ACK, NACK, BEGIN, COMMIT, ABORT """
-        return self.headers.get('transaction')
-    
-    @property
-    def id(self):
-        """ SUBSCRIBE, UNSUBSCRIBE """
-        return self.headers.get('id')
-    
-    @property
-    def ack(self):
-        """ SUBSCRIBE """
-        return self.headers.get('ack', 'auto')
-    
-    @property
-    def subscription(self):
-        """ ACK, NACK, MESSAGE """
-        return self.headers.get('subscription')
-    
-    @property
-    def message_id(self):
-        """ ACK, NACK, MESSAGE """
-        return self.headers.get('message-id')
-    
-    @property
-    def receipt(self):
-        """ SEND, SUBSCRIBE, UNSUBSCRIBE, ACK, NACK, BEGIN, COMMIT, ABORT """
-        return self.headers.get('receipt')
-    
-    @property
-    def receipt_id(self):
-        """ RECEIPT, ERROR """
-        return self.headers.get('receipt-id')
     
     def pack(self):
         """Pack the frame as a string
@@ -162,3 +117,23 @@ class Frame(object):
             headers.append(line)
         
         return self.newline.join(headers) + self.newline*2 + self.body + '\0'
+
+class StreamHandler(BaseHandler):
+    def __init__(self, socket, broker):
+        self.socket = socket
+        self.parser = StreamParser()
+        super(StreamHandler, self).__init__(broker)
+    
+    def _recv(self):
+        self.parser.feed(self.socket.recv(1024))
+        return self.parser.getFrame()
+    
+    def _send(self, data):
+        self.socket.sendall(frame.pack())
+    
+    def _close(self):
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        except:
+            pass
