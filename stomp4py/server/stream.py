@@ -128,8 +128,8 @@ class StreamHandler(BaseHandler):
         self.parser.feed(self.socket.recv(1024))
         return self.parser.getFrame()
     
-    def _send(self, data):
-        self.socket.sendall(frame.pack())
+    def _send(self, command, headers, body=None):
+        self.socket.sendall(StreamFrame(command, headers, body).pack())
     
     def _close(self):
         try:

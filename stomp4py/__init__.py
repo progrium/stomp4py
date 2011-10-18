@@ -2,12 +2,12 @@ class Frame(object):
     """A frame of STOMP protocol
     
     """
-    def __init__(self, command, headers=None, body=''):
+    def __init__(self, command, headers=None, body=None):
         self.command = command
         self.headers = headers
         if self.headers is None:
             self.headers = {}
-        self.body = body
+        self.body = body or ''
         self.error = None
     
     @property

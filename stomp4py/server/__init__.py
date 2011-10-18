@@ -7,6 +7,8 @@ class BaseHandler(object):
     def __init__(self, broker):
         self.broker = broker
         self.connected = True
+        self.subscriptions = {}
+        self.transactions = {}
     
     def serve(self):
         while self.connected:
@@ -40,32 +42,43 @@ class BaseHandler(object):
         handler = 'handle_%s' % frame.command.lower()
         if hasattr(self, handler):
             getattr(self, handler)(frame)
+            if frame.receipt:
+                self._send_receipt(frame)
         else:
             print "Unknown command: %s" % frame.command
 
     def handle_connect(self, frame):
         self.session_id = uuid.uuid4().hex
         self._send("CONNECTED", {'session': self.session_id})
+    
+    def handle_begin(self, frame):
+        self.transactions[frame.transaction] = []
+    
+    def handle_commit(self, frame):
+        for frame in self.transactions.pop(frame.transaction, []):
+            self.broker.send(frame.destination, frame.body)
+
+    def handle_abort(self, frame):
+        del self.transactions[frame.transaction]
 
     def handle_send(self, frame):
-        self.broker.send(frame.destination, frame.body)
-        if frame.receipt:
-            self._send_receipt(frame)
+        if frame.transaction:
+            self.transactions[frame.transaction].append(frame)
+        else:
+            self.broker.send(frame.destination, frame.body)
 
     def handle_subscribe(self, frame):
-        if frame.ack != 'auto':
-            frame.error = "Ack mode 'auto' is the only supported mode"
+        if frame.ack == 'auto':
+            self.subscriptions[frame.destination] = self._send_message
+            self.broker.subscribe(frame.destination, self.subscriptions[frame.destination])
         else:
-            self.broker.subscribe(frame.destination, self._send_message)
-        if frame.receipt:
-            self._send_receipt(frame)
+            frame.error = "Ack mode 'auto' is the only supported mode"
 
     def handle_unsubscribe(self, frame):
-        self.broker.unsubscribe(frame.destination, self._send_message)
-        if frame.receipt:
-            self._send_receipt(frame)
+        if frame.destination in self.subscriptions:
+            self.broker.unsubscribe(frame.destination, self.subscriptions.pop(frame.destination))
+        else:
+            frame.error = "Subscription does not exist"
         
     def handle_disconnect(self, frame):
-        if frame.receipt:
-            self._send_receipt(frame)
         self.connected = False

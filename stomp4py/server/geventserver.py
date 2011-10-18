@@ -3,7 +3,9 @@ import uuid
 
 import gevent.server
 
-from stomp4py.server import ServerHandler
+from ws4py.server.geventserver import WebSocketServer
+
+from stomp4py.server.websocket import WebSocketHandler
 
 class SimpleChannelBroker(object):
     """ Queue-less channel pubsub broker """
@@ -33,9 +35,18 @@ class SimpleChannelBroker(object):
 if __name__ == '__main__':
     broker = SimpleChannelBroker()
     
-    def handle(socket, address):
-        ServerHandler(socket, broker).serve()
-
-    server = gevent.server.StreamServer(('127.0.0.1', 1234), handle) # creates a new server
-    print "Starting Stomp server on 1234..."
+    #def handle(socket, address):
+    #    ServerHandler(socket, broker).serve()
+    #
+    #server = gevent.server.StreamServer(('127.0.0.1', 1234), handle) # creates a new server
+    #print "Starting Stomp server on 1234..."
+    #server.serve_forever()
+    
+    def stomp_handler(websocket, environ):
+        if environ.get('PATH_INFO') == '/stomp':
+            WebSocketHandler(websocket, broker).serve()
+        else:
+            websocket.close()
+    
+    server = WebSocketServer(('127.0.0.1', 9000), stomp_handler)
     server.serve_forever()

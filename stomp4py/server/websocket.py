@@ -2,11 +2,12 @@ import json
 
 from stomp4py import Frame
 from stomp4py.server import BaseHandler
+from stomp4py.server.stream import StreamParser, StreamFrame
 
 class JsonFrame(Frame):
     
     def __init__(self, json_string):
-        obj = json.parse(json_string)
+        obj = json.loads(json_string)
         super(JsonFrame, self).__init__(**obj)
     
     def pack(self):
@@ -18,20 +19,18 @@ class JsonFrame(Frame):
 class WebSocketHandler(BaseHandler):
     """ We're assuming a bit about the websocket API that will be used """
     
-    def __init__(self, socket, broker):
-        self.socket = socket
+    def __init__(self, websocket, broker):
+        self.websocket = websocket
+        self.parser = StreamParser()
         super(WebSocketHandler, self).__init__(broker)
     
     def _recv(self):
-        message = self.socket.receive()
-        if message:
-            return JsonFrame(message)
+        message = self.websocket.receive()
+        self.parser.feed(str(message))
+        return self.parser.getFrame()
     
-    def _send(self, data):
-        self.socket.send(frame.pack())
+    def _send(self, command, headers, body=None):
+        self.websocket.send(StreamFrame(command, headers, body).pack())
     
     def _close(self):
-        try:
-            self.socket.close()
-        except:
-            pass
+        self.websocket.close()
