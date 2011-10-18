@@ -18,6 +18,8 @@ class BaseHandler(object):
                     self._dispatch(frame)
             except IOError:
                 self.connected = False
+        for sub in self.subscriptions:
+            self.broker.unsubscribe(*self.subscriptions[sub])
         self._close()
 
     def _close(self):
@@ -35,8 +37,11 @@ class BaseHandler(object):
         else:
             self._send("RECEIPT", {'receipt-id': frame.receipt})
     
-    def _send_message(self, destination, message_id, body):
-        self._send("MESSAGE", {'destination': destination, 'message-id': message_id}, body)
+    def _send_message(self, destination, subscription, message_id, body):
+        self._send("MESSAGE", {
+            'destination': destination, 
+            'message-id': message_id,
+            'subscription': subscription}, body)
 
     def _dispatch(self, frame):
         handler = 'handle_%s' % frame.command.lower()
@@ -69,14 +74,17 @@ class BaseHandler(object):
 
     def handle_subscribe(self, frame):
         if frame.ack == 'auto':
-            self.subscriptions[frame.destination] = self._send_message
-            self.broker.subscribe(frame.destination, self.subscriptions[frame.destination])
+            sub_id = frame.id or uuid.uuid4().hex
+            cb = lambda id, body: self._send_message(frame.destination, sub_id, id, body)
+            self.subscriptions[sub_id] = (frame.destination, cb)
+            self.broker.subscribe(frame.destination, self.subscriptions[sub_id][1])
         else:
             frame.error = "Ack mode 'auto' is the only supported mode"
 
     def handle_unsubscribe(self, frame):
-        if frame.destination in self.subscriptions:
-            self.broker.unsubscribe(frame.destination, self.subscriptions.pop(frame.destination))
+        if frame.subscription in self.subscriptions:
+            sub = self.subscriptions.pop(frame.subscription)
+            self.broker.unsubscribe(*sub)
         else:
             frame.error = "Subscription does not exist"
         

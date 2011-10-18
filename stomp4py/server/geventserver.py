@@ -30,7 +30,7 @@ class SimpleChannelBroker(object):
     def send(self, destination, message):
         message_id = uuid.uuid4().hex
         for subscriber in self.channels[destination]:
-            subscriber(destination, message_id, message)
+            subscriber(message_id, message)
 
 if __name__ == '__main__':
     broker = SimpleChannelBroker()
