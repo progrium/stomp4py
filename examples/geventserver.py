@@ -4,15 +4,29 @@ import uuid
 import gevent.server
 
 from ws4py.server.geventserver import WebSocketServer
+from stomp4py.server.websocket import StompHandler
 
-from stomp4py.server.websocket import WebSocketHandler
-
-class SimpleChannelBroker(object):
+class StompBroker(object):
     """ Queue-less channel pubsub broker """
     
     def __init__(self):
         self.channels = collections.defaultdict(set)
         self.subscriber_counts = collections.Counter()
+    
+    def __call__(self, frame, payload):
+        print self.subscriber_counts
+        if frame is None or frame.command == 'DISCONNECT':
+            for subscriber in payload:
+                self.unsubscribe(subscriber.destination, subscriber)
+        elif frame.command == 'SUBSCRIBE':
+            self.subscribe(frame.destination, payload)
+        elif frame.command == 'UNSUBSCRIBE':
+            self.unsubscribe(frame.destination, payload)
+        elif frame.command == 'SEND':
+            self.send(frame.destination, payload)
+        elif frame.command == 'COMMIT':
+            for part in payload:
+                self.send(part.destination, part.body)
     
     def subscribe(self, destination, subscriber):
         self.subscriber_counts[destination] += 1
@@ -28,25 +42,18 @@ class SimpleChannelBroker(object):
             del self.channels[destination]
     
     def send(self, destination, message):
-        message_id = uuid.uuid4().hex
         for subscriber in self.channels[destination]:
-            subscriber(message_id, message)
+            subscriber.send(message)
 
 if __name__ == '__main__':
-    broker = SimpleChannelBroker()
+    broker = StompBroker()
     
-    #def handle(socket, address):
-    #    ServerHandler(socket, broker).serve()
-    #
-    #server = gevent.server.StreamServer(('127.0.0.1', 1234), handle) # creates a new server
-    #print "Starting Stomp server on 1234..."
-    #server.serve_forever()
-    
-    def stomp_handler(websocket, environ):
+    def websocket_handler(websocket, environ):
         if environ.get('PATH_INFO') == '/stomp':
-            WebSocketHandler(websocket, broker).serve()
+            StompHandler(websocket, broker).serve()
         else:
             websocket.close()
     
-    server = WebSocketServer(('127.0.0.1', 9000), stomp_handler)
+    server = WebSocketServer(('127.0.0.1', 9000), websocket_handler)
+    print "Starting STOMP WebSocket server on 9000..."
     server.serve_forever()
