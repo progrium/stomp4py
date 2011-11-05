@@ -14,7 +14,6 @@ class StompBroker(object):
         self.subscriber_counts = collections.Counter()
     
     def __call__(self, frame, payload):
-        print self.subscriber_counts
         if frame is None or frame.command == 'DISCONNECT':
             for subscriber in payload:
                 self.unsubscribe(subscriber.destination, subscriber)
