@@ -9,6 +9,7 @@ class StompFrame(object):
         if self.headers is None:
             self.headers = {}
         self.body = body or ''
+        self.conn_id = 0
         self.error = None
     
     @property
@@ -50,6 +51,9 @@ class StompFrame(object):
     def receipt_id(self):
         """ RECEIPT, ERROR """
         return self.headers.get('receipt-id')
+    
+    def __repr__(self):
+        return "<StompFrame:%s %s \"%s\">" % (self.command, self.headers, self.body) 
     
     def pack(self):
         """Pack the frame as a string

@@ -4,10 +4,10 @@ import time
 import socket
 
 class Subscription(object):
-    def __init__(self, handler, id, destination):
+    def __init__(self, handler, frame):
         self.handler = handler
-        self.id = id
-        self.destination = destination
+        self.id = frame.id or uuid.uuid4().hex
+        self.destination = frame.destination
         self.active = True
     
     def send(self, body, headers=None):
@@ -20,6 +20,7 @@ class Subscription(object):
         self.active = False
 
 class BaseHandler(object):
+    subscription_class = Subscription
     
     def __init__(self, app=None):
         if app:
@@ -65,6 +66,7 @@ class BaseHandler(object):
         self._send("MESSAGE", headers, body)
 
     def _dispatch(self, frame):
+        frame.conn_id = id(self)
         handler = 'handle_%s' % frame.command.lower()
         if hasattr(self, handler):
             getattr(self, handler)(frame)
@@ -95,9 +97,8 @@ class BaseHandler(object):
 
     def handle_subscribe(self, frame):
         if frame.ack == 'auto':
-            id = frame.id or uuid.uuid4().hex
-            subscription = Subscription(self, id, frame.destination)
-            self.subscriptions[id] = subscription
+            subscription = self.subscription_class(self, frame)
+            self.subscriptions[subscription.id] = subscription
             self.app(frame, subscription)
         else:
             frame.error = "Ack mode 'auto' is the only supported mode"
